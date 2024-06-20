@@ -78,8 +78,17 @@ pMap(wallets, processWallet, { concurrency, stopOnError: false })
   });
 
 async function processWallet({ wallet, withdrawAddress, proxy }) {
+  const balance = await Promise.any(
+    providers.map((provider) => getTokenContract(provider).balanceOf.staticCall(wallet.address)),
+  );
+
   if (features.claim) {
     const allocation = await getAllocation(wallet, proxy);
+
+    if (balance > 0n) {
+      allocation.isClaimed = true;
+      writeAllocations();
+    }
 
     console.log(`\x1b[36m[${wallet.address}] Allocation of ${ethers.formatUnits(allocation.amount, 18)} ZRO loaded!\x1b[0m`);
     console.log(`\x1b[36m[${wallet.address}] Claiming...\x1b[0m`);
@@ -93,24 +102,20 @@ async function processWallet({ wallet, withdrawAddress, proxy }) {
     if (withdrawAddress) {
       console.log(`\x1b[36m[${wallet.address}] Withdraw...\x1b[0m`);
 
-      await withdraw(wallet, withdrawAddress);
+      if (balance <= 0n) {
+        console.log(`[${wallet.address}] Nothing to withdraw!`);
+
+        return;
+      }
+
+      await withdraw(wallet, withdrawAddress, balance);
 
       await sleep(delay.min, delay.max);
     }
   }
 }
 
-async function withdraw(wallet, withdrawAddress) {
-  const balance = await Promise.any(
-    providers.map((provider) => getTokenContract(provider).balanceOf.staticCall(wallet.address)),
-  );
-
-  if (balance <= 0n) {
-    console.log(`[${wallet.address}] Nothing to withdraw!`);
-
-    return;
-  }
-
+async function withdraw(wallet, withdrawAddress, amount) {
   let nonce;
 
   for (let attempts = 4; attempts >= 0; attempts--) {
@@ -125,7 +130,7 @@ async function withdraw(wallet, withdrawAddress) {
         providers.map((provider) => {
           return getTokenContract(wallet.connect(provider)).transfer(
             withdrawAddress,
-            balance,
+            amount,
             {
               ...gasPrice.withdraw,
               nonce,
@@ -157,7 +162,7 @@ async function withdraw(wallet, withdrawAddress) {
     }
   }
 
-  console.log(`\x1b[32m[${wallet.address}] Withdrawn ${ethers.formatUnits(balance, 18)} ZRO to ${withdrawAddress} successfully!\x1b[0m`);
+  console.log(`\x1b[32m[${wallet.address}] Withdrawn ${ethers.formatUnits(amount, 18)} ZRO to ${withdrawAddress} successfully!\x1b[0m`);
 }
 
 async function claim(wallet, allocation) {
