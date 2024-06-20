@@ -30,7 +30,7 @@ privateKey:withdrawAddress
 
 ## Формат прокси в data/proxies.txt
 
-Прокси опциональные и нужны только для загрузки аллокации с lista.org/airdrop
+Прокси опциональные и нужны только для загрузки аллокации с layerzero.foundation
 
 ```txt
 http://user:pass@127.0.0.1:1234
